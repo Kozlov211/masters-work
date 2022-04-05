@@ -4,7 +4,7 @@
 #include <random>
 #include <map>
 #include <cmath>
-
+#include <algorithm>
 template <typename Type>
 void PrintVector(const std::vector<Type>& S) {
 	// Печать вектора в консоль
@@ -89,21 +89,33 @@ void ProbabilityOfReceivedBits(std::vector<double>& probability_of_received_bits
 } 
 
 double SequenceProbability(const std::vector<uint32_t>& code_sequence, const std::vector<double>& probability_of_received_bits, const std::vector<uint32_t> state) {
-		
-
+	double probability = 1;
+	for (size_t i = 0; i < code_sequence.size(); ++i) {
+			if (code_sequence[i] == state[i]) {
+					probability *= probability_of_received_bits[i];
+			} else {
+					probability *= 1 - probability_of_received_bits[i];
+			}
+	}
+	return probability;
 } 
 
-void HammingDecode(const std::vector<std::vector<uint32_t>>& code_sequence, std::vector<std::vector<uint32_t>>& inf_bits) {
+void HammingDecode(const std::vector<std::vector<uint32_t>>& code_sequences, std::vector<std::vector<uint32_t>>& inf_bits) {
 	std::vector<uint32_t> prefix;
 	std::vector<uint32_t> tmp;
-	tmp = GenerateNumbers(2, code_sequence[0].size(), prefix, tmp);
-	std::vector<std::vector<uint32_t>> all_states (pow(2, code_sequence[0].size()), std::vector<uint32_t> (code_sequence[0].size()));
+	tmp = GenerateNumbers(2, code_sequences[0].size(), prefix, tmp);
+	std::vector<std::vector<uint32_t>> all_states (pow(2, code_sequences[0].size()), std::vector<uint32_t> (code_sequences[0].size()));
 	VectorTo2dVector(all_states, tmp);
-	std::vector<double> probability_of_received_bits (code_sequence[0].size());
-	std::vector<double> sequence_probability (pow(2, code_sequence[0].size()));
+	std::vector<double> probability_of_received_bits (code_sequences[0].size());
+	std::vector<double> sequences_probability (pow(2, code_sequences.size()));
 	ProbabilityOfReceivedBits(probability_of_received_bits);
-		
-	
+	for (size_t i = 0; i < code_sequences.size(); ++i) {
+		for (size_t j = 0; j < code_sequences.size(); ++j) {
+			sequences_probability[j] = SequenceProbability(code_sequences[i], probability_of_received_bits, all_states[j]);
+		}
+		uint32_t element_with_maximum_probability = std::distance(sequences_probability.begin(), (std::max_element(sequences_probability.begin(), sequences_probability.end())));
+		inf_bits[i] = all_states[element_with_maximum_probability];
+	}
 }
 
 uint32_t ModTwoAddVectors(const std::vector<uint32_t>& vec1, const std::vector<uint32_t> vec2) {
@@ -121,9 +133,6 @@ uint32_t CheckError(const std::vector<std::vector<uint32_t>>& out_bits, const st
 	}
 	return errs;
 }
-
-
-
 
 int main () {
 	uint32_t block = 10;
