@@ -9,8 +9,9 @@ template <typename Type>
 void PrintVector(const std::vector<Type>& S) {
 	// Печать вектора в консоль
 	for (const Type& num : S) {
-		std::cout << num << std::endl;
+		std::cout << num << "  ";
 	}
+	std::cout << '\n';
 }
 
 template <typename Type> 
@@ -21,6 +22,7 @@ void Print2dVector(const std::vector<std::vector<Type>>& vec) {
 		}
 		std::cout << std::endl;
 	} 
+	std::cout << '\n';
 }
 
 template <typename Type>
@@ -30,6 +32,7 @@ void VectorTo2dVector(std::vector<std::vector<Type>>& vec2d, const std::vector<T
 						vec2d[i][j] = vec[i * vec2d[0].size() + j];
 				}
 		}
+		std::cout << '\n';
 
 }
 
@@ -108,13 +111,14 @@ void HammingDecode(const std::vector<std::vector<uint32_t>>& code_sequences, std
 	VectorTo2dVector(all_states, tmp);
 	std::vector<double> probability_of_received_bits (code_sequences[0].size());
 	std::vector<double> sequences_probability (pow(2, code_sequences.size()));
-	ProbabilityOfReceivedBits(probability_of_received_bits);
 	for (size_t i = 0; i < code_sequences.size(); ++i) {
-		for (size_t j = 0; j < code_sequences.size(); ++j) {
+		//ProbabilityOfReceivedBits(probability_of_received_bits); // Надежность каждого бита
+		probability_of_received_bits = {.99, .99, .99, .99, .99, .99, .99};
+		for (size_t j = 0; j < all_states.size(); ++j) {
 			sequences_probability[j] = SequenceProbability(code_sequences[i], probability_of_received_bits, all_states[j]);
 		}
 		uint32_t element_with_maximum_probability = std::distance(sequences_probability.begin(), (std::max_element(sequences_probability.begin(), sequences_probability.end())));
-		inf_bits[i] = all_states[element_with_maximum_probability];
+		std::copy(all_states[element_with_maximum_probability].begin(), all_states[element_with_maximum_probability].begin() + inf_bits[0].size(), inf_bits[i].begin());
 	}
 }
 
@@ -144,5 +148,8 @@ int main () {
 	HammingCode(inf_bits, code_sequence);
 	std::vector<std::vector<uint32_t>> bits (block, std::vector<uint32_t> (4)); // Информационные биты (кратны 4)
 	HammingDecode(code_sequence, bits);
+	Print2dVector(inf_bits);
+	std::cout << "\n\n";
+	Print2dVector(bits);
 	return 0;
 }
