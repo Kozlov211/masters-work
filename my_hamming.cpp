@@ -5,6 +5,12 @@
 #include <map>
 #include <cmath>
 #include <algorithm>
+#include <fstream>
+#include <complex>
+
+const double PI = 3.141592;
+const double PI_2 = 2 * PI;
+
 template <typename Type>
 void PrintVector(const std::vector<Type>& S) {
 	// Печать вектора в консоль
@@ -12,6 +18,17 @@ void PrintVector(const std::vector<Type>& S) {
 		std::cout << num << "  ";
 	}
 	std::cout << '\n';
+}
+
+template <typename Type>
+void WriteToTxt(const std::vector<Type>& arr, const std::string& name) {
+	// Запись в файл вектора
+	std::ofstream file;
+	file.open(name);
+	for (const Type& num : arr) {
+			file << num << std::endl;
+	}
+	file.close();
 }
 
 template <typename Type> 
@@ -33,7 +50,72 @@ void VectorTo2dVector(std::vector<std::vector<Type>>& vec2d, const std::vector<T
 				}
 		}
 		std::cout << '\n';
+}
 
+std::vector<double> Modulation(const std::vector<std::vector<uint32_t>>& bits, const double& Fn, const double& Fd) {
+		uint32_t period = Fd / Fn;
+		double t = 1. / Fd;
+		std::vector<double> signal (period * bits.size() * bits[0].size());
+		for (size_t i = 0; i < bits.size(); ++i) {
+				for (size_t j = 0; j < bits[0].size(); ++j)
+						if (bits[i][j] == 0) {
+							for (size_t k = 0 ; k < period; ++k) {
+									signal[(i * bits[0].size() + j) * period + k] = sin(PI_2 * k * t * Fn);
+							}
+						} else {
+							for (size_t k = 0 ; k < period; ++k) {
+									signal[(i * bits[0].size() + j) * period + k] = sin(PI_2 * k * t * Fn + PI);
+							}
+						}
+		}
+		return signal;
+}
+
+std::vector<double> SignalModel(const double& Fn, const uint32_t& Fd, const std::string& model) {
+		uint32_t period = Fd / Fn;
+		std::vector<double> signal_model (period);
+		double t = 1. / Fd;
+		if (model == "sin") {
+				for (size_t i = 0; i < period; ++i) {
+						signal_model[i] = sin(PI_2 * Fn * t);
+				}
+		} else {
+				for (size_t i = 0; i < period; ++i) {
+						signal_model[i] = sin(PI_2 * Fn * t + PI / 2);
+				}
+		}
+		return signal_model;
+}
+
+std::complex<double> ComplexSignal(const std::vector<double>& signal, const std::vector<double>& model_is_sin, const std::vector<double>& model_is_cos) {
+		double sum_is_sin = 0;
+		double sum_is_cos = 0;
+		for (size_t i = 0; i < signal.size(); ++i) {
+				sum_is_sin += signal[i] * model_is_sin[i];
+				sum_is_cos += signal[i] * model_is_cos[i];
+		}
+		std::complex<double> signal_complex (sum_is_sin, sum_is_cos);
+		return signal_complex;
+}
+
+std::vector<std::vector<uint32_t>> Demodulation(const std::vector<double>& signal, const uint32_t& Fd, const double& Fn, const uint32_t& block_size) {
+		uint32_t period = Fd / Fn;
+		double t = 1. / Fd;
+		std::vector<std::vector<uint32_t>> bits (block_size, std::vector<uint32_t> (signal.size() / block_size));
+		std::vector<uint32_t> tmp_bits (signal.size() / period);
+		std::vector<double> tmp_signal (period);
+		std::vector<double> model_is_sin = SignalModel(Fn, Fd, "sin");
+		std::vector<double> model_is_cos = SignalModel(Fn, Fd, "cos");
+		uint32_t counter_1 = 0;
+		uint32_t counter_2 = period;
+		for (size_t i = 0; i < tmp_bits.size(); ++i) {
+				std::copy(signal.begin() + counter_1, signal.begin() + counter_2, tmp_signal.begin());
+				std::complex<double> signal_complex = ComplexSignal(tmp_signal, model_is_sin, model_is_cos);
+				std::cout << signal_complex.real() << " " << signal_complex.imag() << std::endl;
+
+		}
+		std::cout << "WORK";	
+		return bits;
 }
 
 std::vector <uint32_t> GenerateNumbers(const uint32_t& alphabet, const uint32_t& alphabet_length, std::vector<uint32_t> prefix, std::vector<uint32_t> arrays) { 
@@ -151,5 +233,10 @@ int main () {
 	Print2dVector(inf_bits);
 	std::cout << "\n\n";
 	Print2dVector(bits);
+	const double Fn = 1000;
+	const double Fd = 10000;
+	std::vector<double> signal = Modulation(inf_bits, Fn, Fd);
+	std::vector<std::vector<uint32_t>> in_bits = Demodulation(signal, Fd, Fn, block); // Информационные биты (кратны 4)
+
 	return 0;
 }
