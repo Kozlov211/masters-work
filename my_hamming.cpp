@@ -77,11 +77,11 @@ std::vector<double> SignalModel(const double& Fn, const uint32_t& Fd, const std:
 		double t = 1. / Fd;
 		if (model == "sin") {
 				for (size_t i = 0; i < period; ++i) {
-						signal_model[i] = sin(PI_2 * Fn * t);
+						signal_model[i] = sin(PI_2 * Fn * t * i);
 				}
 		} else {
 				for (size_t i = 0; i < period; ++i) {
-						signal_model[i] = sin(PI_2 * Fn * t + PI / 2);
+						signal_model[i] = sin(PI_2 * Fn * t * i + PI / 2);
 				}
 		}
 		return signal_model;
@@ -101,7 +101,7 @@ std::complex<double> ComplexSignal(const std::vector<double>& signal, const std:
 std::vector<std::vector<uint32_t>> Demodulation(const std::vector<double>& signal, const uint32_t& Fd, const double& Fn, const uint32_t& block_size) {
 		uint32_t period = Fd / Fn;
 		double t = 1. / Fd;
-		std::vector<std::vector<uint32_t>> bits (block_size, std::vector<uint32_t> (signal.size() / block_size));
+		std::vector<std::vector<uint32_t>> bits (block_size, std::vector<uint32_t> (signal.size() / block_size / period));
 		std::vector<uint32_t> tmp_bits (signal.size() / period);
 		std::vector<double> tmp_signal (period);
 		std::vector<double> model_is_sin = SignalModel(Fn, Fd, "sin");
@@ -111,12 +111,18 @@ std::vector<std::vector<uint32_t>> Demodulation(const std::vector<double>& signa
 		for (size_t i = 0; i < tmp_bits.size(); ++i) {
 				std::copy(signal.begin() + counter_1, signal.begin() + counter_2, tmp_signal.begin());
 				std::complex<double> signal_complex = ComplexSignal(tmp_signal, model_is_sin, model_is_cos);
-				std::cout << signal_complex.real() << " " << signal_complex.imag() << std::endl;
-
+				counter_1 += period;
+				counter_2 += period;
+				if (std::arg(signal_complex) > -1.57079632679 && std::arg(signal_complex) < 1.57079632679) {
+						tmp_bits[i] = 0;
+				} else {
+						tmp_bits[i] = 1;
+				}
 		}
-		std::cout << "WORK";	
+		VectorTo2dVector(bits, tmp_bits);
 		return bits;
 }
+
 
 std::vector <uint32_t> GenerateNumbers(const uint32_t& alphabet, const uint32_t& alphabet_length, std::vector<uint32_t> prefix, std::vector<uint32_t> arrays) { 
 		if (alphabet_length == 0) { 
@@ -130,7 +136,6 @@ std::vector <uint32_t> GenerateNumbers(const uint32_t& alphabet, const uint32_t&
         prefix.push_back(digit); 
 		arrays = GenerateNumbers(alphabet, alphabet_length - 1, prefix, arrays); 
 	   	prefix.pop_back(); 
-  
     } 
      return arrays; 
 }
@@ -164,6 +169,27 @@ void HammingCode(const std::vector<std::vector<uint32_t>>& inf_bits, std::vector
 	}
 }
 
+std::vector<double> NormalDistribution(const double& step, const double& mean, const double& dispersion) {
+		double standart_deviation = sqrt(dispersion);
+		double from_distribution = - PI_2;
+		double to_distribution = PI_2;
+		uint32_t abscissa_size = 0;
+		double tmp = from_distribution;
+		while (tmp < to_distribution) {
+				++abscissa_size;
+				tmp += step;
+		}
+		std::vector<double> abscissa (abscissa_size);
+		for (double& x : abscissa) {
+				x = from_distribution + step;
+		}
+		std::vector<double> distribution (abscissa.size());
+		for (size_t i = 0; i < abscissa.size(); ++i) {
+				distribution[i] = 1 / (standart_deviation * sqrt(PI_2)) * exp(-pow((abscissa[i] - mean), 2) / (2 * pow(standart_deviation, 2)));
+		}
+		return distribution;
+}
+
 void ProbabilityOfReceivedBits(std::vector<double>& probability_of_received_bits) {
 	std::random_device rnd;
 	std::mt19937 gen(rnd());
@@ -185,13 +211,20 @@ double SequenceProbability(const std::vector<uint32_t>& code_sequence, const std
 	return probability;
 } 
 
+void PossibleStates(std::vector<std::vector<uint32_t>>& all_states, const uint32_t& out_bits_size, const uint32_t& in_bits_size) {
+		std::vector<uint32_t> prefix;
+		std::vector<uint32_t> possible_states;
+		possible_states = GenerateNumbers(2, in_bits_size, prefix, possible_states);
+		std::vector<std::vector<uint32_t>> tmp (pow(2, in_bits_size), std::vector<uint32_t> (in_bits_size));
+		VectorTo2dVector(tmp, possible_states);
+		HammingCode(tmp, all_states);
+
+}
+
 void HammingDecode(const std::vector<std::vector<uint32_t>>& code_sequences, std::vector<std::vector<uint32_t>>& inf_bits) {
-	std::vector<uint32_t> prefix;
-	std::vector<uint32_t> tmp;
-	tmp = GenerateNumbers(2, code_sequences[0].size(), prefix, tmp);
-	std::vector<std::vector<uint32_t>> all_states (pow(2, code_sequences[0].size()), std::vector<uint32_t> (code_sequences[0].size()));
-	VectorTo2dVector(all_states, tmp);
+	std::vector<std::vector<uint32_t>> all_states (pow(2, inf_bits[0].size()), std::vector<uint32_t> (code_sequences[0].size()));
 	std::vector<double> probability_of_received_bits (code_sequences[0].size());
+	PossibleStates(all_states, code_sequences[0].size(), inf_bits[0].size());
 	std::vector<double> sequences_probability (pow(2, code_sequences.size()));
 	for (size_t i = 0; i < code_sequences.size(); ++i) {
 		//ProbabilityOfReceivedBits(probability_of_received_bits); // Надежность каждого бита
@@ -222,21 +255,26 @@ uint32_t CheckError(const std::vector<std::vector<uint32_t>>& out_bits, const st
 
 int main () {
 	uint32_t block = 10;
-	std::vector<std::vector<uint32_t>> inf_bits (block, std::vector<uint32_t> (4)); // Информационные биты (кратны 4)
-	for (std::vector<uint32_t>& bits : inf_bits) {
-		RandBits(bits);
-	}
-	std::vector<std::vector<uint32_t>> code_sequence (block, std::vector<uint32_t> (7)); // Код Хэмминга 7,4,3
-	HammingCode(inf_bits, code_sequence);
-	std::vector<std::vector<uint32_t>> bits (block, std::vector<uint32_t> (4)); // Информационные биты (кратны 4)
-	HammingDecode(code_sequence, bits);
-	Print2dVector(inf_bits);
-	std::cout << "\n\n";
-	Print2dVector(bits);
 	const double Fn = 1000;
 	const double Fd = 10000;
-	std::vector<double> signal = Modulation(inf_bits, Fn, Fd);
-	std::vector<std::vector<uint32_t>> in_bits = Demodulation(signal, Fd, Fn, block); // Информационные биты (кратны 4)
-
+	std::vector<std::vector<uint32_t>> out_bits (block, std::vector<uint32_t> (4)); // Информационные биты (кратны 4)
+	for (std::vector<uint32_t>& bits : out_bits) {
+		RandBits(bits);
+	}
+	Print2dVector(out_bits);
+	std::vector<std::vector<uint32_t>> out_code_sequence (block, std::vector<uint32_t> (7)); // Код Хэмминга 7,4,3
+	HammingCode(out_bits, out_code_sequence);
+	Print2dVector(out_code_sequence);
+	std::vector<double> signal = Modulation(out_code_sequence, Fn, Fd);
+	double mean = 0;
+	double dispersion = 10;
+	AddNormalNoise(signal, mean, dispersion);
+	std::vector<std::vector<uint32_t>> in_code_sequence = Demodulation(signal, Fd, Fn, block); // Информационные биты (кратны 4)
+	std::vector<std::vector<uint32_t>> in_bits (block, std::vector<uint32_t> (4)); // Информационные биты (кратны 4)
+	Print2dVector(in_code_sequence);
+	HammingDecode(in_code_sequence, in_bits);
+	Print2dVector(in_bits);
+	std::vector<double> graph = NormalDistribution(0.1, 0, 2);
+	WriteToTxt(graph, "norm.txt");
 	return 0;
 }
