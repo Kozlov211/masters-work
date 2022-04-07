@@ -49,7 +49,6 @@ void VectorTo2dVector(std::vector<std::vector<Type>>& vec2d, const std::vector<T
 						vec2d[i][j] = vec[i * vec2d[0].size() + j];
 				}
 		}
-		std::cout << '\n';
 }
 
 std::vector<double> NormalDistribution(const double& step, const double& mean, const double& dispersion, std::vector<double>& abscissa) {
@@ -76,16 +75,19 @@ std::vector<double> NormalDistribution(const double& step, const double& mean, c
 
 void DensityProbability(std::vector<double>& distribution_0, const double& mean_0, std::vector<double>& distribution_1, const double& mean_1, const double& step, const double& dispersion, std::vector<double>& abscissa) {
 	distribution_0 = NormalDistribution(step, mean_0, dispersion, abscissa);
-	std::vector<double> tmp = NormalDistribution(step, -mean_1, dispersion, abscissa);
-	distribution_1 = NormalDistribution(step, mean_1, dispersion, abscissa);
-	for (size_t i = 0; i < distribution_0.size(); ++i) {
+	std::vector<double> tmp = NormalDistribution(step, mean_1, dispersion, abscissa);
+	distribution_1 = NormalDistribution(step, -mean_1, dispersion, abscissa);
+	for (size_t i = 0; i < distribution_1.size(); ++i) {
 			distribution_1[i] += tmp[i];
 	}
 }
 
-double LikelihoodRatio(const std::vector<double>& distribution_0, const std::vector<double> distribution_1, const double& phi, const double& step, const std::vector<double>& abscissa) {
+double LikelihoodRatio(const std::vector<double>& distribution_0, const std::vector<double> distribution_1, const double& phi, const double& step, const std::vector<double>& abscissa, const uint32_t& bit) {
 	double phi_0 = 0;
 	double phi_1 = 0;
+	WriteToTxt(abscissa, "abscissa.txt");
+	WriteToTxt(distribution_0, "norm_0.txt");
+	WriteToTxt(distribution_1, "norm_1.txt");
 	for (size_t i = 0; i < distribution_0.size() - 1; ++i) {
 			if (abscissa[i] < phi && abscissa[i + 1] > phi) {
 					if (std::abs(abscissa[i] - phi) < step / 2) {
@@ -99,8 +101,10 @@ double LikelihoodRatio(const std::vector<double>& distribution_0, const std::vec
 					}
 			}
 	}
-	double probability = (phi_0 / phi_1) / (1 + (phi_0 / phi_1));
-	return probability;
+	if (bit == 0) {
+		return (phi_0 / phi_1) / (1 + (phi_0 / phi_1));
+	}
+	return 1 / (1 + (phi_0 / phi_1));
 }
 
 std::vector<double> Modulation(const std::vector<std::vector<uint32_t>>& bits, const double& Fn, const double& Fd) {
@@ -175,7 +179,7 @@ std::vector<std::vector<uint32_t>> Demodulation(const std::vector<double>& signa
 				} else {
 						tmp_bits[i] = 1;
 				}
-				tmp_probability[i] = LikelihoodRatio(distribution_0, distribution_1, std::arg(signal_complex), step, abscissa);
+				tmp_probability[i] = LikelihoodRatio(distribution_0, distribution_1, std::arg(signal_complex), step, abscissa, tmp_bits[i]);
 		}
 		VectorTo2dVector(bits, tmp_bits);
 		VectorTo2dVector(probability_of_received_bits, tmp_probability);
@@ -230,6 +234,7 @@ void HammingCode(const std::vector<std::vector<uint32_t>>& inf_bits, std::vector
 
 double SequenceProbability(const std::vector<uint32_t>& code_sequence, const std::vector<double>& probability_of_received_bits, const std::vector<uint32_t> state) {
 	double probability = 1;
+//	PrintVector(probability_of_received_bits);
 	for (size_t i = 0; i < code_sequence.size(); ++i) {
 			if (code_sequence[i] == state[i]) {
 					probability *= probability_of_received_bits[i];
@@ -252,7 +257,7 @@ void PossibleStates(std::vector<std::vector<uint32_t>>& all_states, const uint32
 void HammingDecode(const std::vector<std::vector<uint32_t>>& code_sequences, std::vector<std::vector<uint32_t>>& inf_bits, const std::vector<std::vector<double>>& probability_of_received_bits) {
 	std::vector<std::vector<uint32_t>> all_states (pow(2, inf_bits[0].size()), std::vector<uint32_t> (code_sequences[0].size()));
 	PossibleStates(all_states, code_sequences[0].size(), inf_bits[0].size());
-	std::vector<double> sequences_probability (pow(2, code_sequences.size()));
+	std::vector<double> sequences_probability (all_states.size());
 	for (size_t i = 0; i < code_sequences.size(); ++i) {
 		for (size_t j = 0; j < all_states.size(); ++j) {
 			sequences_probability[j] = SequenceProbability(code_sequences[i], probability_of_received_bits[i], all_states[j]);
@@ -279,7 +284,7 @@ uint32_t CheckError(const std::vector<std::vector<uint32_t>>& out_bits, const st
 }
 
 int main () {
-	uint32_t block = 100;
+	uint32_t block = 5;
 	const double Fn = 1000;
 	const double Fd = 10000;
 	std::vector<std::vector<uint32_t>> out_bits (block, std::vector<uint32_t> (4)); // Информационные биты (кратны 4)
@@ -297,6 +302,7 @@ int main () {
 	std::vector<std::vector<uint32_t>> in_bits (block, std::vector<uint32_t> (4)); // Информационные биты (кратны 4)
 	HammingDecode(in_code_sequence, in_bits, probability_of_received_bits);
 	uint32_t err = CheckError(out_bits, in_bits);
+	Print2dVector(probability_of_received_bits);
 	std::cout << err << std::endl;
 	return 0;
 }
