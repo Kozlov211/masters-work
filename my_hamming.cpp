@@ -234,7 +234,6 @@ void HammingCode(const std::vector<std::vector<uint32_t>>& inf_bits, std::vector
 
 double SequenceProbability(const std::vector<uint32_t>& code_sequence, const std::vector<double>& probability_of_received_bits, const std::vector<uint32_t> state) {
 	double probability = 1;
-//	PrintVector(probability_of_received_bits);
 	for (size_t i = 0; i < code_sequence.size(); ++i) {
 			if (code_sequence[i] == state[i]) {
 					probability *= probability_of_received_bits[i];
