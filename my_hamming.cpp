@@ -1,5 +1,6 @@
 #include <cmath>
 #include <iostream>
+#include <ostream>
 #include <vector>
 #include <random>
 #include <map>
@@ -8,7 +9,7 @@
 #include <fstream>
 #include <complex>
 
-const double PI = 3.141592;
+const double PI = 3.14159265359;
 const double PI_2 = 2 * PI;
 
 template <typename Type>
@@ -51,63 +52,17 @@ void VectorTo2dVector(std::vector<std::vector<Type>>& vec2d, const std::vector<T
 		}
 }
 
-std::vector<double> NormalDistribution(const double& step, const double& mean, const double& dispersion, std::vector<double>& abscissa) {
-		double standart_deviation = sqrt(dispersion);
-		double from_distribution = - 4 * standart_deviation;
-		double to_distribution = 4 * standart_deviation;
-		uint32_t abscissa_size = 0;
-		double tmp = from_distribution;
-		while (tmp < to_distribution) {
-				++abscissa_size;
-				tmp += step;
-		}
-		abscissa.resize(abscissa_size);
-		for (double& x : abscissa) {
-				x = from_distribution;
-				from_distribution += step;
-		}
-		std::vector<double> distribution (abscissa.size());
-		for (size_t i = 0; i < abscissa.size(); ++i) {
-				distribution[i] = 1 / (standart_deviation * sqrt(PI_2)) * exp(-pow((abscissa[i] - mean), 2) / (2 * pow(standart_deviation, 2)));
-		}
-		return distribution;
-}
-
-void DensityProbability(std::vector<double>& distribution_0, const double& mean_0, std::vector<double>& distribution_1, const double& mean_1, const double& step, const double& dispersion, std::vector<double>& abscissa) {
-	distribution_0 = NormalDistribution(step, mean_0, dispersion, abscissa);
-	std::vector<double> tmp = NormalDistribution(step, mean_1, dispersion, abscissa);
-	distribution_1 = NormalDistribution(step, -mean_1, dispersion, abscissa);
-	for (size_t i = 0; i < distribution_1.size(); ++i) {
-			distribution_1[i] += tmp[i];
-	}
-}
-
-double LikelihoodRatio(const std::vector<double>& distribution_0, const std::vector<double> distribution_1, const double& phi, const double& step, const std::vector<double>& abscissa, const uint32_t& bit) {
-	double phi_0 = 0;
-	double phi_1 = 0;
-	WriteToTxt(abscissa, "abscissa.txt");
-	WriteToTxt(distribution_0, "norm_0.txt");
-	WriteToTxt(distribution_1, "norm_1.txt");
-	for (size_t i = 0; i < distribution_0.size() - 1; ++i) {
-			if (abscissa[i] < phi && abscissa[i + 1] > phi) {
-					if (std::abs(abscissa[i] - phi) < step / 2) {
-							phi_0 = distribution_0[i];
-							phi_1 = distribution_1[i];
-							break;
-					} else {
-							phi_0 = distribution_0[i + 1];
-							phi_1 = distribution_1[i + 1];
-							break;
-					}
-			}
-	}
+double LikelihoodRatio(const double& phi, const uint32_t& bit, const double& dispersion) {
+	double standart_deviation = sqrt(dispersion);
+	double phi_0 = 1 / (standart_deviation * sqrt(PI_2)) * exp(-1 / (2 * standart_deviation) * pow((phi - 0), 2));
+	double phi_1 = 1 / (standart_deviation * sqrt(PI_2)) * exp(-1 / (2 * standart_deviation) * pow((std::abs(phi) - PI), 2));
 	if (bit == 0) {
-		return (phi_0 / phi_1) / (1 + (phi_0 / phi_1));
+	 	return  (phi_0 / phi_1) / (1 + (phi_0 / phi_1));
 	}
-	return 1 / (1 + (phi_0 / phi_1));
+	return 1 / (1 + phi_0 / phi_1);
 }
 
-std::vector<double> Modulation(const std::vector<std::vector<uint32_t>>& bits, const double& Fn, const double& Fd) {
+std::vector<double> Modulation(const std::vector<std::vector<uint32_t>>& bits,const double& A, const double& Fn, const double& Fd) {
 		uint32_t period = Fd / Fn;
 		double t = 1. / Fd;
 		std::vector<double> signal (period * bits.size() * bits[0].size());
@@ -115,11 +70,11 @@ std::vector<double> Modulation(const std::vector<std::vector<uint32_t>>& bits, c
 				for (size_t j = 0; j < bits[0].size(); ++j)
 						if (bits[i][j] == 0) {
 							for (size_t k = 0 ; k < period; ++k) {
-									signal[(i * bits[0].size() + j) * period + k] = sin(PI_2 * k * t * Fn);
+									signal[(i * bits[0].size() + j) * period + k] = A * sin(PI_2 * k * t * Fn);
 							}
 						} else {
 							for (size_t k = 0 ; k < period; ++k) {
-									signal[(i * bits[0].size() + j) * period + k] = sin(PI_2 * k * t * Fn + PI);
+									signal[(i * bits[0].size() + j) * period + k] = A * sin(PI_2 * k * t * Fn + PI);
 							}
 						}
 		}
@@ -154,13 +109,8 @@ std::complex<double> ComplexSignal(const std::vector<double>& signal, const std:
 }
 
 std::vector<std::vector<uint32_t>> Demodulation(const std::vector<double>& signal, const uint32_t& Fd, const double& Fn, const uint32_t& block_size, const double& dispersion, std::vector<std::vector<double>>& probability_of_received_bits) {
-		std::vector<double> distribution_0;
-		std::vector<double> distribution_1;
-		std::vector<double> abscissa;
-		double step = 0.001;
-		DensityProbability(distribution_0, 0, distribution_1, PI, step, dispersion, abscissa);
-		uint32_t period = Fd / Fn;
 		double t = 1. / Fd;
+		uint32_t period = Fd / Fn;
 		std::vector<std::vector<uint32_t>> bits (block_size, std::vector<uint32_t> (signal.size() / block_size / period));
 		std::vector<uint32_t> tmp_bits (signal.size() / period);
 		std::vector<double> tmp_probability (tmp_bits.size());
@@ -179,13 +129,12 @@ std::vector<std::vector<uint32_t>> Demodulation(const std::vector<double>& signa
 				} else {
 						tmp_bits[i] = 1;
 				}
-				tmp_probability[i] = LikelihoodRatio(distribution_0, distribution_1, std::arg(signal_complex), step, abscissa, tmp_bits[i]);
+				tmp_probability[i] = LikelihoodRatio(std::arg(signal_complex), tmp_bits[i], dispersion);
 		}
 		VectorTo2dVector(bits, tmp_bits);
 		VectorTo2dVector(probability_of_received_bits, tmp_probability);
 		return bits;
 }
-
 
 std::vector <uint32_t> GenerateNumbers(const uint32_t& alphabet, const uint32_t& alphabet_length, std::vector<uint32_t> prefix, std::vector<uint32_t> arrays) { 
 		if (alphabet_length == 0) { 
@@ -274,34 +223,50 @@ uint32_t ModTwoAddVectors(const std::vector<uint32_t>& vec1, const std::vector<u
 	return result;
 }
 
-uint32_t CheckError(const std::vector<std::vector<uint32_t>>& out_bits, const std::vector<std::vector<uint32_t>>& in_bits) {
-	uint32_t errs = 0;
+double CheckError(const std::vector<std::vector<uint32_t>>& out_bits, const std::vector<std::vector<uint32_t>>& in_bits) {
+	double  errs = 0;
 	for (size_t i = 0; i < out_bits.size(); ++i) {
 			errs += ModTwoAddVectors(out_bits[i], in_bits[i]);
 	}
-	return errs;
+	return errs / in_bits.size() / in_bits[0].size();
 }
 
-int main () {
-	uint32_t block = 5;
+void Plotting(const uint32_t& count) {
+	uint32_t block = 2500000;
 	const double Fn = 1000;
 	const double Fd = 10000;
+	std::vector<double> A (count);
+	std::vector<double> h (count);
+	std::vector<double> err (count);
+	const uint32_t period = Fd / Fn;
+	const double mean = 0;
+	const double dispersion = 1;
+	double coef = 0.5;
+	for (double i = 0; i < count; ++i) {
+			A[i] = sqrt(4 * i * coef * dispersion / period); 
+			h[i] = i * coef;
+	}
 	std::vector<std::vector<uint32_t>> out_bits (block, std::vector<uint32_t> (4)); // Информационные биты (кратны 4)
 	for (std::vector<uint32_t>& bits : out_bits) {
 		RandBits(bits);
 	}
 	std::vector<std::vector<uint32_t>> out_code_sequence (block, std::vector<uint32_t> (7)); // Код Хэмминга 7,4,3
 	HammingCode(out_bits, out_code_sequence);
-	std::vector<double> signal = Modulation(out_code_sequence, Fn, Fd);
-	double mean = 0;
-	double dispersion = 1;
-	AddNormalNoise(signal, mean, dispersion);
-	std::vector<std::vector<double>> probability_of_received_bits (block, std::vector<double> (out_code_sequence[0].size()));
-	std::vector<std::vector<uint32_t>> in_code_sequence = Demodulation(signal, Fd, Fn, block, dispersion, probability_of_received_bits); // Информационные биты (кратны 4)
-	std::vector<std::vector<uint32_t>> in_bits (block, std::vector<uint32_t> (4)); // Информационные биты (кратны 4)
-	HammingDecode(in_code_sequence, in_bits, probability_of_received_bits);
-	uint32_t err = CheckError(out_bits, in_bits);
-	Print2dVector(probability_of_received_bits);
-	std::cout << err << std::endl;
+	for (size_t i = 0; i < count; ++i) {
+		std::vector<double> signal = Modulation(out_code_sequence, A[i], Fn, Fd);
+		AddNormalNoise(signal, mean, dispersion);
+		std::vector<std::vector<double>> probability_of_received_bits (block, std::vector<double> (out_code_sequence[0].size()));
+		std::vector<std::vector<uint32_t>> in_code_sequence = Demodulation(signal, Fd, Fn, block, dispersion, probability_of_received_bits); // Информационные биты (кратны 4)
+		std::vector<std::vector<uint32_t>> in_bits (block, std::vector<uint32_t> (4)); // Информационные биты (кратны 4)
+		HammingDecode(in_code_sequence, in_bits, probability_of_received_bits);
+		err[i] = CheckError(out_bits, in_bits);
+		std::cout << err[i] << std::endl;
+	}
+	WriteToTxt(h, "h.txt");
+	WriteToTxt(err, "err.txt");
+}
+
+int main () {
+	Plotting(20);
 	return 0;
 }
