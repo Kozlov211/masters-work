@@ -81,7 +81,7 @@ std::vector<double> Modulation(const std::vector<std::vector<uint32_t>>& bits,co
 		return signal;
 }
 
-std::vector<double> SignalModel(const double& Fn, const uint32_t& Fd, const std::string& model) {
+std::vector<double> SignalModel(const double&A, const double& Fn, const uint32_t& Fd, const std::string& model) {
 		uint32_t period = Fd / Fn;
 		std::vector<double> signal_model (period);
 		double t = 1. / Fd;
@@ -108,15 +108,15 @@ std::complex<double> ComplexSignal(const std::vector<double>& signal, const std:
 		return signal_complex;
 }
 
-std::vector<std::vector<uint32_t>> Demodulation(const std::vector<double>& signal, const uint32_t& Fd, const double& Fn, const uint32_t& block_size, const double& dispersion, std::vector<std::vector<double>>& probability_of_received_bits) {
+std::vector<std::vector<uint32_t>> Demodulation(const std::vector<double>& signal, const double& A,  const uint32_t& Fd, const double& Fn, const uint32_t& block_size, const double& dispersion, std::vector<std::vector<double>>& probability_of_received_bits) {
 		double t = 1. / Fd;
 		uint32_t period = Fd / Fn;
 		std::vector<std::vector<uint32_t>> bits (block_size, std::vector<uint32_t> (signal.size() / block_size / period));
 		std::vector<uint32_t> tmp_bits (signal.size() / period);
 		std::vector<double> tmp_probability (tmp_bits.size());
 		std::vector<double> tmp_signal (period);
-		std::vector<double> model_is_sin = SignalModel(Fn, Fd, "sin");
-		std::vector<double> model_is_cos = SignalModel(Fn, Fd, "cos");
+		std::vector<double> model_is_sin = SignalModel(A, Fn, Fd, "sin");
+		std::vector<double> model_is_cos = SignalModel(A, Fn, Fd, "cos");
 		uint32_t counter_1 = 0;
 		uint32_t counter_2 = period;
 		for (size_t i = 0; i < tmp_bits.size(); ++i) {
@@ -232,7 +232,7 @@ double CheckError(const std::vector<std::vector<uint32_t>>& out_bits, const std:
 }
 
 void Plotting(const uint32_t& count) {
-	uint32_t block = 2500000;
+	uint32_t block = 1000000;
 	const double Fn = 1000;
 	const double Fd = 10000;
 	std::vector<double> A (count);
@@ -256,17 +256,17 @@ void Plotting(const uint32_t& count) {
 		std::vector<double> signal = Modulation(out_code_sequence, A[i], Fn, Fd);
 		AddNormalNoise(signal, mean, dispersion);
 		std::vector<std::vector<double>> probability_of_received_bits (block, std::vector<double> (out_code_sequence[0].size()));
-		std::vector<std::vector<uint32_t>> in_code_sequence = Demodulation(signal, Fd, Fn, block, dispersion, probability_of_received_bits); // Информационные биты (кратны 4)
+		std::vector<std::vector<uint32_t>> in_code_sequence = Demodulation(signal, A[i], Fd, Fn, block, dispersion, probability_of_received_bits); // Информационные биты (кратны 4)
 		std::vector<std::vector<uint32_t>> in_bits (block, std::vector<uint32_t> (4)); // Информационные биты (кратны 4)
 		HammingDecode(in_code_sequence, in_bits, probability_of_received_bits);
 		err[i] = CheckError(out_bits, in_bits);
-		std::cout << err[i] << std::endl;
+		std::cout << "Итерация: " << i << " Ошибка: " << err[i] << std::endl;
 	}
-	WriteToTxt(h, "h.txt");
-	WriteToTxt(err, "err.txt");
+	WriteToTxt(h, "h_my_hamming.txt");
+	WriteToTxt(err, "err_my_hamming.txt");
 }
 
 int main () {
-	Plotting(20);
+	Plotting(10);
 	return 0;
 }
