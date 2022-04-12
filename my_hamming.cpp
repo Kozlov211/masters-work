@@ -205,11 +205,14 @@ void PossibleStates(std::vector<std::vector<uint32_t>>& all_states, const uint32
 void HammingDecode(const std::vector<std::vector<uint32_t>>& code_sequences, std::vector<std::vector<uint32_t>>& inf_bits, const std::vector<std::vector<double>>& probability_of_received_bits) {
 	std::vector<std::vector<uint32_t>> all_states (pow(2, inf_bits[0].size()), std::vector<uint32_t> (code_sequences[0].size()));
 	PossibleStates(all_states, code_sequences[0].size(), inf_bits[0].size());
+	Print2dVector(all_states);
 	std::vector<double> sequences_probability (all_states.size());
 	for (size_t i = 0; i < code_sequences.size(); ++i) {
 		for (size_t j = 0; j < all_states.size(); ++j) {
 			sequences_probability[j] = SequenceProbability(code_sequences[i], probability_of_received_bits[i], all_states[j]);
 		}
+		Print2dVector(probability_of_received_bits);
+		PrintVector(sequences_probability);
 		uint32_t element_with_maximum_probability = std::distance(sequences_probability.begin(), (std::max_element(sequences_probability.begin(), sequences_probability.end())));
 		std::copy(all_states[element_with_maximum_probability].begin(), all_states[element_with_maximum_probability].begin() + inf_bits[0].size(), inf_bits[i].begin());
 	}
@@ -232,7 +235,7 @@ double CheckError(const std::vector<std::vector<uint32_t>>& out_bits, const std:
 }
 
 void Plotting(const uint32_t& count) {
-	uint32_t block = 1000000;
+	uint32_t block = 1;
 	const double Fn = 1000;
 	const double Fd = 10000;
 	std::vector<double> A (count);
@@ -253,20 +256,23 @@ void Plotting(const uint32_t& count) {
 	std::vector<std::vector<uint32_t>> out_code_sequence (block, std::vector<uint32_t> (7)); // Код Хэмминга 7,4,3
 	HammingCode(out_bits, out_code_sequence);
 	for (size_t i = 0; i < count; ++i) {
+		A[i] = 1;
 		std::vector<double> signal = Modulation(out_code_sequence, A[i], Fn, Fd);
 		AddNormalNoise(signal, mean, dispersion);
+		Print2dVector(out_code_sequence);
 		std::vector<std::vector<double>> probability_of_received_bits (block, std::vector<double> (out_code_sequence[0].size()));
 		std::vector<std::vector<uint32_t>> in_code_sequence = Demodulation(signal, A[i], Fd, Fn, block, dispersion, probability_of_received_bits); // Информационные биты (кратны 4)
 		std::vector<std::vector<uint32_t>> in_bits (block, std::vector<uint32_t> (4)); // Информационные биты (кратны 4)
+		Print2dVector(in_code_sequence);
 		HammingDecode(in_code_sequence, in_bits, probability_of_received_bits);
 		err[i] = CheckError(out_bits, in_bits);
 		std::cout << "Итерация: " << i << " Ошибка: " << err[i] << std::endl;
 	}
-	WriteToTxt(h, "h_my_hamming.txt");
-	WriteToTxt(err, "err_my_hamming.txt");
+//	WriteToTxt(h, "h_my_hamming.txt");
+//	WriteToTxt(err, "err_my_hamming.txt");
 }
 
 int main () {
-	Plotting(10);
+	Plotting(1);
 	return 0;
 }

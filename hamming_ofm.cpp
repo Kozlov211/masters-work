@@ -53,22 +53,25 @@ void VectorTo2dVector(std::vector<std::vector<Type>>& vec2d, const std::vector<T
 }
 
 
-std::vector<double> Modulation(const std::vector<std::vector<uint32_t>>& bits,const double& A, const double& Fn, const double& Fd) {
+std::vector<double> Modulation(std::vector<uint32_t>& bits,const double& A, const double& Fn, const double& Fd) {
 		uint32_t period = Fd / Fn;
 		double t = 1. / Fd;
-		std::vector<double> signal (period * bits.size() * bits[0].size());
+		double phase_shift = 0;
+		auto it = bits.begin();
+		it = bits.insert(it, 0);
+		std::vector<double> signal (period * bits.size());
 		for (size_t i = 0; i < bits.size(); ++i) {
-				for (size_t j = 0; j < bits[0].size(); ++j)
-						if (bits[i][j] == 0) {
-							for (size_t k = 0 ; k < period; ++k) {
-									signal[(i * bits[0].size() + j) * period + k] = A * sin(PI_2 * k * t * Fn);
+					if (bits[i] == 0) {
+						for (size_t j  = 0 ; j < period; ++j) {
+									signal[i * period + j] = A * sin(PI_2 * j * t * Fn + phase_shift);
 							}
 						} else {
-							for (size_t k = 0 ; k < period; ++k) {
-									signal[(i * bits[0].size() + j) * period + k] = A * sin(PI_2 * k * t * Fn + PI);
+							phase_shift += PI;
+							for (size_t j  = 0 ; j < period; ++j) {
+									signal[i * period + j] = A * sin(PI_2 * j * t * Fn + phase_shift);
 							}
-						}
-		}
+						}				
+				}
 		return signal;
 }
 
@@ -95,32 +98,33 @@ std::complex<double> ComplexSignal(const std::vector<double>& signal, const std:
 				sum_is_sin += signal[i] * model_is_sin[i];
 				sum_is_cos += signal[i] * model_is_cos[i];
 		}
-		std::complex<double> signal_complex (sum_is_sin, sum_is_cos);
+		std::complex<double> signal_complex (sum_is_cos, sum_is_sin);
 		return signal_complex;
 }
 
-std::vector<std::vector<uint32_t>> Demodulation(const std::vector<double>& signal, const uint32_t& Fd, const double& Fn, const double& A,const uint32_t& block_size) {
+std::vector<uint32_t> Demodulation(const std::vector<double>& signal, const uint32_t& Fd, const double& Fn, const double& A,const uint32_t& block_size) {
 		double t = 1. / Fd;
 		uint32_t period = Fd / Fn;
-		std::vector<std::vector<uint32_t>> bits (block_size, std::vector<uint32_t> (signal.size() / block_size / period));
-		std::vector<uint32_t> tmp_bits (signal.size() / period);
+		std::vector<uint32_t> bits (signal.size() / period - 1) ;
 		std::vector<double> tmp_signal (period);
 		std::vector<double> model_is_sin = SignalModel(A, Fn, Fd, "sin");
 		std::vector<double> model_is_cos = SignalModel(A, Fn, Fd, "cos");
 		uint32_t counter_1 = 0;
 		uint32_t counter_2 = period;
-		for (size_t i = 0; i < tmp_bits.size(); ++i) {
-				std::copy(signal.begin() + counter_1, signal.begin() + counter_2, tmp_signal.begin());
-				std::complex<double> signal_complex = ComplexSignal(tmp_signal, model_is_sin, model_is_cos);
-				counter_1 += period;
-				counter_2 += period;
-				if (std::arg(signal_complex) > -1.57079632679 && std::arg(signal_complex) < 1.57079632679) {
-						tmp_bits[i] = 0;
-				} else {
-						tmp_bits[i] = 1;
-				}
+		std::copy(signal.begin(), signal.begin() + period, tmp_signal.begin());
+		std::complex<double> signal_complex_0_T = ComplexSignal(tmp_signal, model_is_sin, model_is_cos);
+		for (size_t i = 0; i < bits.size(); ++i) {
+					std::copy(signal.begin() + counter_1 + period, signal.begin() + counter_2 + period, tmp_signal.begin());
+					std::complex<double> signal_complex_T_2T = ComplexSignal(tmp_signal, model_is_sin, model_is_cos);
+					counter_1 += period;
+					counter_2 += period;
+					if (std::arg(signal_complex_0_T / signal_complex_T_2T) > -1.57079632679 && std::arg(signal_complex_0_T / signal_complex_T_2T) < 1.57079632679) {
+							bits[i] = 0;
+					} else {
+							bits[i] = 1;
+					}
+					signal_complex_0_T = signal_complex_T_2T;
 		}
-		VectorTo2dVector(bits, tmp_bits);
 		return bits;
 }
 
@@ -160,12 +164,12 @@ void AddNormalNoise(std::vector<double>& signal,const double& mean, const double
 	}
 }
 
-void HammingCode(const std::vector<std::vector<uint32_t>>& inf_bits, std::vector<std::vector<uint32_t>>& code_sequence) {
-	for (size_t i = 0; i < inf_bits.size(); ++i) {
-			std::copy(inf_bits[i].begin(), inf_bits[i].end(), code_sequence[i].begin());
-			code_sequence[i][4] = (inf_bits[i][0] + inf_bits[i][1] + inf_bits[i][2]) % 2;
-			code_sequence[i][5] = (inf_bits[i][1] + inf_bits[i][2] + inf_bits[i][3]) % 2;
-			code_sequence[i][6] = (inf_bits[i][0] + inf_bits[i][1] + inf_bits[i][3]) % 2;
+void HammingCode(const std::vector<uint32_t>& inf_bits, std::vector<uint32_t>& code_sequence) {
+	for (size_t i = 0; i < inf_bits.size() / 4; ++i) {
+			std::copy(inf_bits.begin() + i * 4, inf_bits.begin() + i * 4 + 4, code_sequence.begin() + i * 7);
+			code_sequence[i * 7 + 4] = (inf_bits[i * 4] + inf_bits[i * 4 + 1] + inf_bits[i * 4 + 2]) % 2;
+			code_sequence[i * 7 + 5] = (inf_bits[i * 4 + 1] + inf_bits[i * 4 + 2] + inf_bits[i * 4 + 3]) % 2;
+			code_sequence[i * 7 + 6] = (inf_bits[i * 4] + inf_bits[i * 4 + 1] + inf_bits[i * 4 + 3]) % 2;
 	}
 }
 
@@ -175,42 +179,35 @@ void PossibleStates(std::vector<std::vector<uint32_t>>& all_states, const uint32
 		possible_states = GenerateNumbers(2, in_bits_size, prefix, possible_states);
 		std::vector<std::vector<uint32_t>> tmp (pow(2, in_bits_size), std::vector<uint32_t> (in_bits_size));
 		VectorTo2dVector(tmp, possible_states);
-		HammingCode(tmp, all_states);
+		//HammingCode(tmp, all_states);
 }
 
-void HammingDecode( std::vector<std::vector<uint32_t>>& code_sequences, std::vector<std::vector<uint32_t>>& inf_bits) {
+void HammingDecode(std::vector<uint32_t>& code_sequences, std::vector<uint32_t>& inf_bits) {
 		std::map<std::vector<uint32_t>, uint32_t> syndroms = {{{1, 0, 1}, 0}, {{1, 1, 1}, 1}, {{1, 1, 0}, 2}, {{0, 1, 1}, 3}, {{1, 0, 0}, 4}, {{0, 1, 0}, 5}, {{0, 0, 1}, 6}};
 		std::vector<uint32_t> syndrome (3);
-		for (size_t i = 0; i < code_sequences.size(); ++i) {
-				syndrome[0] = (code_sequences[i][4] + code_sequences[i][0] + code_sequences[i][1] + code_sequences[i][2]) % 2;
-				syndrome[1] = (code_sequences[i][5] + code_sequences[i][1] + code_sequences[i][2] + code_sequences[i][3]) % 2;
-				syndrome[2] = (code_sequences[i][6] + code_sequences[i][0] + code_sequences[i][1] + code_sequences[i][3]) % 2;
+		for (size_t i = 0; i < code_sequences.size() / 7; ++i) {
+				syndrome[0] = (code_sequences[i * 7 + 4] + code_sequences[i * 7] + code_sequences[i * 7 + 1] + code_sequences[i * 7 + 2]) % 2;
+				syndrome[1] = (code_sequences[i * 7 + 5] + code_sequences[i * 7 + 1] + code_sequences[i * 7 + 2] + code_sequences[i * 7 + 3]) % 2;
+				syndrome[2] = (code_sequences[i * 7 + 6] + code_sequences[i * 7] + code_sequences[i * 7 + 1] + code_sequences[i * 7 + 3]) % 2;
 				std::map<std::vector<uint32_t>, uint32_t>::iterator check = syndroms.find(syndrome);
 				if (check != syndroms.end()) {
-						code_sequences[i][check->second] = (code_sequences[i][check->second] + 1) % 2;
+						code_sequences[i * 7 + check->second] = (code_sequences[i * 7 + check->second] + 1) % 2;
 				}
-				std::copy(code_sequences[i].begin(), code_sequences[i].begin() + inf_bits[0].size(), inf_bits[i].begin());
+				std::copy(code_sequences.begin() + i * 7, code_sequences.begin() + i * 7 + 4 , inf_bits.begin() + i * 4);
 		}
 }
 
-uint32_t ModTwoAddVectors(const std::vector<uint32_t>& vec1, const std::vector<uint32_t> vec2) {
-	uint32_t result = 0;
-	for (size_t i = 0; i < vec1.size(); ++i) {
-			result += (vec1[i] + vec2[i]) % 2;
-	}
-	return result;
-}
 
-double CheckError(const std::vector<std::vector<uint32_t>>& out_bits, const std::vector<std::vector<uint32_t>>& in_bits) {
+double CheckError(const std::vector<uint32_t>& out_bits, const std::vector<uint32_t>& in_bits) {
 	double  errs = 0;
 	for (size_t i = 0; i < out_bits.size(); ++i) {
-			errs += ModTwoAddVectors(out_bits[i], in_bits[i]);
+			errs += (out_bits[i] + in_bits[i]) % 2;
 	}
-	return errs / in_bits.size() / in_bits[0].size();
+	return errs / in_bits.size();
 }
 
 void Plotting(const uint32_t& count) {
-	uint32_t block = 1;
+	uint32_t block = 2;
 	const double Fn = 1000;
 	const double Fd = 10000;
 	std::vector<double> A (count);
@@ -220,28 +217,33 @@ void Plotting(const uint32_t& count) {
 	const double mean = 0;
 	const double dispersion = 1;
 	double coef = 0.5;
-	std::vector<std::vector<uint32_t>> out_bits (block, std::vector<uint32_t> (4)); // Информационные биты (кратны 4)
-	for (std::vector<uint32_t>& bits : out_bits) {
-		RandBits(bits);
+	std::vector<uint32_t> out_bits (block * 4); // Информационные биты (кратны 4)
+	for (uint32_t& bit : out_bits) {
+		std::random_device rnd;
+		std::mt19937 gen(rnd());
+		std::uniform_int_distribution<uint32_t> number(0, 1);
+		bit = number(gen);
 	}
-	std::vector<std::vector<uint32_t>> out_code_sequence (block, std::vector<uint32_t> (7)); // Код Хэмминга 7,4,3
+	std::vector<uint32_t> out_code_sequence (block * 7); // Код Хэмминга 7,4,3
 	HammingCode(out_bits, out_code_sequence);
 	for (size_t i = 0; i < count; ++i) {
 		A[i] = sqrt(4 * i * coef * dispersion / period); 
 		h[i] = i * coef;
+		A[i] = 100;
 		std::vector<double> signal = Modulation(out_code_sequence, A[i], Fn, Fd);
 		AddNormalNoise(signal, mean, dispersion);
-		std::vector<std::vector<uint32_t>> in_code_sequence = Demodulation(signal, Fd, Fn, A[i], block); // Информационные биты (кратны 4)
-		std::vector<std::vector<uint32_t>> in_bits (block, std::vector<uint32_t> (4)); // Информационные биты (кратны 4)
+		std::vector<uint32_t> in_code_sequence = Demodulation(signal, Fd, Fn, A[i], block); // Информационные биты (кратны 4)
+		std::vector<uint32_t> in_bits (block * 4); // Информационные биты (кратны 4)
 		HammingDecode(in_code_sequence, in_bits);
 		err[i] = CheckError(out_bits, in_bits);
+
 		std::cout << "Итерация: " << i << " Ошибка: " << err[i] << std::endl;
 	}
 //		WriteToTxt(h, "h_hamming.txt");
-//		WriteToTxt(err, "err_hamming.txt");
+//		WriteToTxt(err, "err_hamming.txt");*/
 }
 
 int main () {
-	Plotting(2);
+	Plotting(1);
 	return 0;
 }
