@@ -61,11 +61,11 @@ std::vector<double> Modulation(const std::vector<std::vector<uint32_t>>& bits,co
 				for (size_t j = 0; j < bits[0].size(); ++j)
 						if (bits[i][j] == 0) {
 							for (size_t k = 0 ; k < period; ++k) {
-									signal[(i * bits[0].size() + j) * period + k] = A * sin(PI_2 * k * t * Fn);
+									signal[(i * bits[0].size() + j) * period + k] = A * cos(PI_2 * k * t * Fn);
 							}
 						} else {
 							for (size_t k = 0 ; k < period; ++k) {
-									signal[(i * bits[0].size() + j) * period + k] = A * sin(PI_2 * k * t * Fn + PI);
+									signal[(i * bits[0].size() + j) * period + k] = A * cos(PI_2 * k * t * Fn + PI);
 							}
 						}
 		}
@@ -95,7 +95,7 @@ std::complex<double> ComplexSignal(const std::vector<double>& signal, const std:
 				sum_is_sin += signal[i] * model_is_sin[i];
 				sum_is_cos += signal[i] * model_is_cos[i];
 		}
-		std::complex<double> signal_complex (sum_is_sin, sum_is_cos);
+		std::complex<double> signal_complex (sum_is_cos, sum_is_sin);
 		return signal_complex;
 }
 
@@ -210,7 +210,7 @@ double CheckError(const std::vector<std::vector<uint32_t>>& out_bits, const std:
 }
 
 void Plotting(const uint32_t& count) {
-	uint32_t block = 1;
+	uint32_t block = 1000000;
 	const double Fn = 1000;
 	const double Fd = 10000;
 	std::vector<double> A (count);
@@ -227,8 +227,8 @@ void Plotting(const uint32_t& count) {
 	std::vector<std::vector<uint32_t>> out_code_sequence (block, std::vector<uint32_t> (7)); // Код Хэмминга 7,4,3
 	HammingCode(out_bits, out_code_sequence);
 	for (size_t i = 0; i < count; ++i) {
-		A[i] = sqrt(4 * i * coef * dispersion / period); 
 		h[i] = i * coef;
+		A[i] = sqrt(4 * h[i] * dispersion / period); 
 		std::vector<double> signal = Modulation(out_code_sequence, A[i], Fn, Fd);
 		AddNormalNoise(signal, mean, dispersion);
 		std::vector<std::vector<uint32_t>> in_code_sequence = Demodulation(signal, Fd, Fn, A[i], block); // Информационные биты (кратны 4)
@@ -237,11 +237,11 @@ void Plotting(const uint32_t& count) {
 		err[i] = CheckError(out_bits, in_bits);
 		std::cout << "Итерация: " << i << " Ошибка: " << err[i] << std::endl;
 	}
-//		WriteToTxt(h, "h_hamming.txt");
-//		WriteToTxt(err, "err_hamming.txt");
+		WriteToTxt(h, "h_hamming.txt");
+		WriteToTxt(err, "err_hamming.txt");
 }
 
 int main () {
-	Plotting(2);
+	Plotting(8);
 	return 0;
 }

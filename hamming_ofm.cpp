@@ -63,12 +63,12 @@ std::vector<double> Modulation(std::vector<uint32_t>& bits,const double& A, cons
 		for (size_t i = 0; i < bits.size(); ++i) {
 					if (bits[i] == 0) {
 						for (size_t j  = 0 ; j < period; ++j) {
-									signal[i * period + j] = A * sin(PI_2 * j * t * Fn + phase_shift);
+									signal[i * period + j] = A * cos(PI_2 * j * t * Fn + phase_shift);
 							}
 						} else {
 							phase_shift += PI;
 							for (size_t j  = 0 ; j < period; ++j) {
-									signal[i * period + j] = A * sin(PI_2 * j * t * Fn + phase_shift);
+									signal[i * period + j] = A * cos(PI_2 * j * t * Fn + phase_shift);
 							}
 						}				
 				}
@@ -207,7 +207,7 @@ double CheckError(const std::vector<uint32_t>& out_bits, const std::vector<uint3
 }
 
 void Plotting(const uint32_t& count) {
-	uint32_t block = 2;
+	uint32_t block = 1000000;
 	const double Fn = 1000;
 	const double Fd = 10000;
 	std::vector<double> A (count);
@@ -227,10 +227,9 @@ void Plotting(const uint32_t& count) {
 	std::vector<uint32_t> out_code_sequence (block * 7); // Код Хэмминга 7,4,3
 	HammingCode(out_bits, out_code_sequence);
 	for (size_t i = 0; i < count; ++i) {
-		A[i] = sqrt(4 * i * coef * dispersion / period); 
 		h[i] = i * coef;
-		A[i] = 100;
-		std::vector<double> signal = Modulation(out_code_sequence, A[i], Fn, Fd);
+		A[i] = sqrt(4 * h[i] * dispersion / period); 
+		std::vector<double> signal = Modulation(out_bits, A[i], Fn, Fd);
 		AddNormalNoise(signal, mean, dispersion);
 		std::vector<uint32_t> in_code_sequence = Demodulation(signal, Fd, Fn, A[i], block); // Информационные биты (кратны 4)
 		std::vector<uint32_t> in_bits (block * 4); // Информационные биты (кратны 4)
@@ -244,6 +243,6 @@ void Plotting(const uint32_t& count) {
 }
 
 int main () {
-	Plotting(1);
+	Plotting(8);
 	return 0;
 }
