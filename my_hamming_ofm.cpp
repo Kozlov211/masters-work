@@ -52,6 +52,16 @@ void VectorTo2dVector(std::vector<std::vector<Type>>& vec2d, const std::vector<T
 		}
 }
 
+double LikelihoodRatio(const double& phi, const uint32_t& bit, const double& d, const double& A) {
+    double bes = std::cyl_bessel_i(0, d);
+	double phi_0 = 1 / (PI_2 * bes) * exp(d * cos(phi));
+	double phi_1 = 1 / (PI_2 * bes) * exp(d * cos(PI - std::abs(phi)));
+    if (bit == 0) {
+        return  (phi_0 / phi_1) / (1 + (phi_0 / phi_1));
+    }
+    return 1 / (1 + phi_0 / phi_1);
+}
+
 
 std::vector<double> Modulation(std::vector<uint32_t> bits,const double& A, const double& Fn, const double& Fd) {
 		uint32_t period = Fd / Fn;
@@ -102,7 +112,7 @@ std::complex<double> ComplexSignal(const std::vector<double>& signal, const std:
 		return signal_complex;
 }
 
-std::vector<uint32_t> Demodulation(const std::vector<double>& signal, const uint32_t& Fd, const double& Fn, const double& A,const uint32_t& block_size) {
+std::vector<uint32_t> Demodulation(const std::vector<double>& signal, const uint32_t& Fd, const double& Fn, const double& A, const uint32_t& block_size, const double& d, std::vector<double>& probability_of_received_bits) {
 		double t = 1. / Fd;
 		uint32_t period = Fd / Fn;
 		std::vector<uint32_t> bits (signal.size() / period - 1) ;
@@ -123,6 +133,7 @@ std::vector<uint32_t> Demodulation(const std::vector<double>& signal, const uint
 					} else {
 							bits[i] = 1;
 					}
+					probability_of_received_bits[i] = LikelihoodRatio(std::arg(signal_complex_0_T / signal_complex_T_2T), bits[i], d, A);
 					signal_complex_0_T = signal_complex_T_2T;
 		}
 		return bits;
@@ -173,27 +184,42 @@ void HammingCode(const std::vector<uint32_t>& inf_bits, std::vector<uint32_t>& c
 	}
 }
 
-void PossibleStates(std::vector<std::vector<uint32_t>>& all_states, const uint32_t& out_bits_size, const uint32_t& in_bits_size) {
+std::vector<std::vector<uint32_t>> PossibleStates() {
+		std::vector<std::vector<uint32_t>> all_states (16, std::vector<uint32_t> (7));
 		std::vector<uint32_t> prefix;
 		std::vector<uint32_t> possible_states;
-		possible_states = GenerateNumbers(2, in_bits_size, prefix, possible_states);
-		std::vector<std::vector<uint32_t>> tmp (pow(2, in_bits_size), std::vector<uint32_t> (in_bits_size));
-		VectorTo2dVector(tmp, possible_states);
-		//HammingCode(tmp, all_states);
+		possible_states = GenerateNumbers(2, 4, prefix, possible_states);
+		std::vector<uint32_t> tmp (16 * 7);
+		HammingCode(possible_states, tmp);
+		VectorTo2dVector(all_states, tmp);
+		return all_states;
 }
 
-void HammingDecode(std::vector<uint32_t>& code_sequences, std::vector<uint32_t>& inf_bits) {
-		std::map<std::vector<uint32_t>, uint32_t> syndroms = {{{1, 0, 1}, 0}, {{1, 1, 1}, 1}, {{1, 1, 0}, 2}, {{0, 1, 1}, 3}, {{1, 0, 0}, 4}, {{0, 1, 0}, 5}, {{0, 0, 1}, 6}};
-		std::vector<uint32_t> syndrome (3);
+double SequenceProbability(const std::vector<uint32_t>& code_sequence, const std::vector<double>& probability_of_received_bits, const std::vector<uint32_t> state) {
+    double probability = 1;
+    for (size_t i = 0; i < code_sequence.size(); ++i) {
+            if (code_sequence[i] == state[i]) {
+                    probability *= probability_of_received_bits[i];
+            } else {
+                    probability *= 1 - probability_of_received_bits[i];
+            }
+    }
+    return probability;
+}
+
+void HammingDecode(std::vector<uint32_t>& code_sequences, std::vector<uint32_t>& inf_bits, const std::vector<double>& probability_of_received_bits) {
+		std::vector<uint32_t> tmp_code_sequences (7);
+		std::vector<double> tmp_probability_of_received_bits (7);
+		std::vector<std::vector<uint32_t>> all_states = PossibleStates();
+		std::vector<double> sequences_probability (all_states.size());
 		for (size_t i = 0; i < code_sequences.size() / 7; ++i) {
-				syndrome[0] = (code_sequences[i * 7 + 4] + code_sequences[i * 7] + code_sequences[i * 7 + 1] + code_sequences[i * 7 + 2]) % 2;
-				syndrome[1] = (code_sequences[i * 7 + 5] + code_sequences[i * 7 + 1] + code_sequences[i * 7 + 2] + code_sequences[i * 7 + 3]) % 2;
-				syndrome[2] = (code_sequences[i * 7 + 6] + code_sequences[i * 7] + code_sequences[i * 7 + 1] + code_sequences[i * 7 + 3]) % 2;
-				std::map<std::vector<uint32_t>, uint32_t>::iterator check = syndroms.find(syndrome);
-				if (check != syndroms.end()) {
-						code_sequences[i * 7 + check->second] = (code_sequences[i * 7 + check->second] + 1) % 2;
+				std::copy(code_sequences.begin() + i * 7, code_sequences.begin() + i * 7 + 7, tmp_code_sequences.begin());
+				std::copy(probability_of_received_bits.begin() + i * 7, probability_of_received_bits.begin() + i * 7 + 7, tmp_probability_of_received_bits.begin());
+				for (size_t j = 0; j < all_states.size(); ++j) {
+						sequences_probability[j] = SequenceProbability(tmp_code_sequences, tmp_probability_of_received_bits, all_states[j]);
 				}
-				std::copy(code_sequences.begin() + i * 7, code_sequences.begin() + i * 7 + 4 , inf_bits.begin() + i * 4);
+		        uint32_t element_with_maximum_probability = std::distance(sequences_probability.begin(), (std::max_element(sequences_probability.begin(), sequences_probability.end())));
+        		std::copy(all_states[element_with_maximum_probability].begin(), all_states[element_with_maximum_probability].begin() + 4, inf_bits.begin() + i * 4);
 		}
 }
 
@@ -210,6 +236,7 @@ void Plotting() {
 	uint32_t block = 1000000;
 	const double Fn = 1000;
 	const double Fd = 10000;
+	std::vector<double> d = {0, 1.5, 4.35, 9.25};
 	std::vector<double> A = {0, 1, 2, 3};
 	std::vector<double> h (A.size());
 	std::vector<double> err (A.size());
@@ -230,14 +257,15 @@ void Plotting() {
 		h[i] = pow(A[i], 2) * period / 4 / dispersion;
 		std::vector<double> signal = Modulation(out_code_sequence, A[i], Fn, Fd);
 		AddNormalNoise(signal, mean, dispersion);
-		std::vector<uint32_t> in_code_sequence = Demodulation(signal, Fd, Fn, A[i], block); // Информационные биты (кратны 4)
+		std::vector<double> probability_of_received_bits (block * 7);
+		std::vector<uint32_t> in_code_sequence = Demodulation(signal, Fd, Fn, A[i], block, d[i], probability_of_received_bits); // Информационные биты (кратны 4)
 		std::vector<uint32_t> in_bits (block * 4); // Информационные биты (кратны 4)
-		HammingDecode(in_code_sequence, in_bits);
+		HammingDecode(in_code_sequence, in_bits, probability_of_received_bits);
 		err[i] = CheckError(out_bits, in_bits);
 		std::cout << "Итерация: " << i << " Ошибка: " << err[i] << std::endl;
 	}
-		WriteToTxt(h, "h_hamming_ofm.txt");
-		WriteToTxt(err, "err_hamming_ofm.txt");
+		WriteToTxt(h, "my_h_hamming_ofm.txt");
+		WriteToTxt(err, "my_err_hamming_ofm.txt");
 }
 
 int main () {

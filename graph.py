@@ -3,11 +3,11 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import (MultipleLocator, FormatStrFormatter, AutoMinorLocator)
 import matplotlib.ticker as ticker
 
-y1 = np.loadtxt("err_hamming.txt")
-x1 = np.loadtxt("h_hamming.txt")
-y2 = np.loadtxt("err_my_hamming.txt")
-x2 = np.loadtxt("h_hamming.txt")
-
+y1 = np.loadtxt("err_hamming_ofm.txt")
+x1 = np.loadtxt("h_hamming_ofm.txt")
+y2 = np.loadtxt("my_err_hamming_ofm.txt")
+x2 = np.loadtxt("my_h_hamming_ofm.txt")
+print(x1)
 #fig, axs = plt.subplots()
 #axs.plot(x1, y1, label='Жесткое')
 #axs.plot(x2, y2, label='Мягкое')
