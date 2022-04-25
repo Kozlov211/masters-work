@@ -109,8 +109,58 @@ std::vector<std::vector<std::complex<double>>> AddNormalNoise (const std::vector
 	return signal_with_noise;
 }
 
+double LikelihoodRatio(const double& phi, const uint32_t& bit, const double& d, const double& A) {
+    double bes = std::cyl_bessel_i(0, d);
+	double phi_0 = 1 / (PI_2 * bes) * exp(d * cos(phi));
+	double phi_1 = 1 / (PI_2 * bes) * exp(d * cos(PI - std::abs(phi)));
+    if (bit == 0) {
+        return  (phi_0 / phi_1) / (1 + (phi_0 / phi_1));
+    }
+    return 1 / (1 + phi_0 / phi_1);
+}
 
-std::vector<std::vector<uint32_t>> Demodulation (const std::vector<std::vector<std::complex<double>>>& signal_with_noise) {
+double SequenceProbability(const std::vector<uint32_t>& code_sequence, const std::vector<double>& bit_reliability, const std::vector<uint32_t> state) {
+    double probability = 1;
+    for (size_t i = 0; i < code_sequence.size(); ++i) {
+    	if (code_sequence[i] == state[i]) {
+        	probability *= bit_reliability[i];
+        } else {
+            probability *= 1 - bit_reliability[i];
+        }
+    }
+    return probability;
+}
+
+std::vector <uint32_t> GenerateNumbers(const uint32_t& alphabet, const uint32_t& alphabet_length, std::vector<uint32_t> prefix, std::vector<uint32_t> arrays) { 
+		if (alphabet_length == 0) { 
+				for (const uint32_t& n : prefix) {
+						arrays.push_back(n); 
+				} 
+        return arrays; 
+
+    } 
+    for (int digit = 0; digit < alphabet; digit++) { 
+        prefix.push_back(digit); 
+		arrays = GenerateNumbers(alphabet, alphabet_length - 1, prefix, arrays); 
+	   	prefix.pop_back(); 
+    } 
+     return arrays; 
+}
+
+std::vector<std::vector<uint32_t>> PossibleStates(const uint32_t& out_bits_size, const uint32_t& in_bits_size) {
+	std::vector<uint32_t> prefix;
+	std::vector<uint32_t> possible_states;
+	possible_states = GenerateNumbers(2, in_bits_size, prefix, possible_states);
+	std::vector<std::vector<uint32_t>> tmp (pow(2, in_bits_size), std::vector<uint32_t> (in_bits_size));
+	VectorTo2dVector(tmp, possible_states);
+	std::vector<std::vector<uint32_t>> all_states = Coding(tmp);
+	for (std::vector<uint32_t>& states : all_states) {
+		states.erase(states.begin());
+	}
+	return all_states;
+}
+
+std::vector<std::vector<uint32_t>> Demodulation (const std::vector<std::vector<std::complex<double>>>& signal_with_noise, std::vector<std::vector<double>>& bit_reliability, const double& d, const double& A) {
 	std::vector<std::vector<uint32_t>> in_bits (signal_with_noise.size(), std::vector<uint32_t> (signal_with_noise[0].size() - 1));
 	for (size_t i = 0; i < signal_with_noise.size(); ++i) {
 		std::complex<double> signal_complex_0_T = signal_with_noise[i][0];
@@ -122,25 +172,41 @@ std::vector<std::vector<uint32_t>> Demodulation (const std::vector<std::vector<s
 			} else {
 					in_bits[i][j] = 1;
 			}
+			bit_reliability[i][j] = LikelihoodRatio(phi, in_bits[i][j], d, A);
+
 		}		
 	}
 	return in_bits;
 }
 
-uint32_t ModTwoAddVectors(const std::vector<uint32_t>& vec1, const std::vector<uint32_t> vec2) {
-	uint32_t result = 0;
-	for (size_t i = 0; i < vec1.size(); ++i) {
-			result += (vec1[i + 1] + vec2[i]) % 2;
+
+std::vector<std::vector<uint32_t>> Decoding(const std::vector<std::vector<uint32_t>>& in_code_sequences , const std::vector<std::vector<double>>& probability_of_received_bits) {
+	std::vector<std::vector<uint32_t>> in_bits (in_code_sequences.size(), std::vector<uint32_t> (4));
+	std::vector<std::vector<uint32_t>> all_states = PossibleStates(in_code_sequences[0].size(), in_bits[0].size());
+	std::vector<double> sequences_probability (all_states.size());
+	for (size_t i = 0; i < in_code_sequences.size(); ++i) {
+		for (size_t j = 0; j < all_states.size(); ++j) {
+			sequences_probability[j] = SequenceProbability(in_code_sequences[i], probability_of_received_bits[i], all_states[j]);
+		}
+		uint32_t element_with_maximum_probability = std::distance(sequences_probability.begin(), (std::max_element(sequences_probability.begin(), sequences_probability.end())));
+		std::copy(all_states[element_with_maximum_probability].begin(), all_states[element_with_maximum_probability].begin() + in_bits[0].size(), in_bits[i].begin());
 	}
-	return result;
+	return in_bits;
+}
+
+bool  ModTwoAddVectors(const std::vector<uint32_t>& vec1, const std::vector<uint32_t> vec2) {
+	for (size_t i = 0; i < vec1.size(); ++i) {
+			if (vec1[i] != vec2[i]) {
+				return true;
+			}
+	}
+	return false;
 }
 
 double CheckError(const std::vector<std::vector<uint32_t>>& out_bits, const std::vector<std::vector<uint32_t>>& in_bits) {
 	double errs = 0;
 	for (size_t i = 0; i < out_bits.size(); ++i) {
-			if (ModTwoAddVectors(out_bits[i], in_bits[i]) > 1) {
-				errs += 1;
-			} 
+			errs += ModTwoAddVectors(out_bits[i], in_bits[i]);
 	}
 	return errs / static_cast<double>(in_bits.size());
 }
@@ -152,11 +218,14 @@ int main () {
 		RandBits(bits);
 	}
 	std::vector<std::vector<uint32_t>> out_code_sequences = Coding(out_bits);
-	double A = 4;
+	double A = 10;
+	double d = 9.25;
 	std::vector<std::vector<std::complex<double>>> signal =  Modulation(out_code_sequences, A);
 	std::vector<std::vector<std::complex<double>>> signal_with_noise = AddNormalNoise(signal);
-	std::vector<std::vector<uint32_t>> in_code_sequences = Demodulation(signal_with_noise);
-	std::cout << CheckError(out_code_sequences, in_code_sequences) << std::endl;
+	std::vector<std::vector<double>> bit_reliability (block, std::vector<double> (7));
+	std::vector<std::vector<uint32_t>> in_code_sequences = Demodulation(signal_with_noise, bit_reliability, d, A);
+	std::vector<std::vector<uint32_t>> in_bits = Decoding(in_code_sequences, bit_reliability);
+	std::cout << CheckError(out_bits, in_bits) << std::endl;
 //	Print2dVector(out_code_sequences);
 //	Print2dVector(in_code_sequences);
 //	Print2dVector(out_bits);
