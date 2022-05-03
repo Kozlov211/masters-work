@@ -80,14 +80,15 @@ std::vector<std::vector<uint32_t>> Coding(const std::vector<std::vector<uint32_t
 	return code_sequences;
 }
 
-std::vector<std::vector<std::complex<double>>> Modulation (const std::vector<std::vector<uint32_t>> code_sequences, const double& A) {
+std::vector<std::vector<std::complex<double>>> Modulation (const std::vector<std::vector<uint32_t>> code_sequences, double& A) {
 	std::vector<std::vector<std::complex<double>>> signal (code_sequences.size(), std::vector<std::complex<double>> (8));
 	for (size_t i = 0; i < signal.size(); ++i) {
 		for (size_t j = 0; j < signal[0].size(); ++j) {
 			if (code_sequences[i][j]) {
+				A = -A;
 				signal[i][j] = std::complex<double>(A, 0);
 			} else {
-				signal[i][j] = std::complex<double>(-A, 0);
+				signal[i][j] = std::complex<double>(A, 0);
 			}
 		}
 	}
@@ -122,6 +123,7 @@ std::vector<std::vector<uint32_t>> Demodulation (const std::vector<std::vector<s
 			} else {
 					in_bits[i][j] = 1;
 			}
+			signal_complex_0_T = signal_complex_T_2T;
 		}		
 	}
 	return in_bits;
@@ -146,17 +148,28 @@ double CheckError(const std::vector<std::vector<uint32_t>>& out_bits, const std:
 }
 
 int main () {
-	uint32_t block = 10;
+	uint32_t block = 1000000;
 	std::vector<std::vector<uint32_t>> out_bits (block, std::vector<uint32_t> (4));
 	for (std::vector<uint32_t>& bits : out_bits) {
 		RandBits(bits);
 	}
 	std::vector<std::vector<uint32_t>> out_code_sequences = Coding(out_bits);
-	double A = 4;
-	std::vector<std::vector<std::complex<double>>> signal =  Modulation(out_code_sequences, A);
-	std::vector<std::vector<std::complex<double>>> signal_with_noise = AddNormalNoise(signal);
-	std::vector<std::vector<uint32_t>> in_code_sequences = Demodulation(signal_with_noise);
-	std::cout << CheckError(out_code_sequences, in_code_sequences) << std::endl;
+	std::vector<uint32_t> h = {0, 1, 2, 3};
+	std::vector<double> errs (4);
+	double A;
+	for (size_t i = 0; i < h.size(); ++i) {
+		A = sqrt(h[i]);
+		std::vector<std::vector<std::complex<double>>> signal =  Modulation(out_code_sequences, A);
+		std::vector<std::vector<std::complex<double>>> signal_with_noise = AddNormalNoise(signal);
+		std::vector<std::vector<uint32_t>> in_code_sequences = Demodulation(signal_with_noise);
+		errs[i] = CheckError(out_code_sequences, in_code_sequences);
+		std::cout << CheckError(out_code_sequences, in_code_sequences) << std::endl;
+	}
+	WriteToTxt(errs, "err_vector.txt");
+//	std::vector<std::vector<std::complex<double>>> signal =  Modulation(out_code_sequences, A);
+//	std::vector<std::vector<std::complex<double>>> signal_with_noise = AddNormalNoise(signal);
+//	std::vector<std::vector<uint32_t>> in_code_sequences = Demodulation(signal_with_noise);
+//	std::cout << CheckError(out_code_sequences, in_code_sequences) << std::endl;
 //	Print2dVector(out_code_sequences);
 //	Print2dVector(in_code_sequences);
 //	Print2dVector(out_bits);
