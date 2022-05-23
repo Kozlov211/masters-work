@@ -228,6 +228,8 @@ int main () {
 	std::vector<double> A = {0, sqrt(2), 2, sqrt(6)};
 	std::vector<double> d = {0, 1.5, 4.35, 9.25};
 	std::vector<double> errs (4);
+	cout << "Кодовая комбинация" << endl;
+	Print2dVector(out_code_sequences);
 	for (size_t i = 0; i < A.size(); ++i) {
 		cout << "Отношение сигнал/шум: " << i << endl;
 		std::vector<std::vector<std::complex<double>>> signal =  Modulation(out_code_sequences, A[i]);
