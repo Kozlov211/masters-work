@@ -8,6 +8,9 @@
 #include <fstream>
 #include <complex>
 
+
+using namespace std;
+
 const double PI = 3.14159265359;
 const double PI_2 = 2 * PI;
 
@@ -190,13 +193,15 @@ std::vector<std::vector<uint32_t>> Decoding(const std::vector<std::vector<uint32
 		for (size_t j = 0; j < all_states.size(); ++j) {
 			sequences_probability[j] = SequenceProbability(in_code_sequences[i], probability_of_received_bits[i], all_states[j]);
 		}
+		cout << "Вероятность кодовой комбинации" << endl;
+		PrintVector(sequences_probability);
 		uint32_t element_with_maximum_probability = std::distance(sequences_probability.begin(), (std::max_element(sequences_probability.begin(), sequences_probability.end())));
 		std::copy(all_states[element_with_maximum_probability].begin(), all_states[element_with_maximum_probability].begin() + in_bits[0].size(), in_bits[i].begin());
 	}
 	return in_bits;
 }
 
-bool  ModTwoAddVectors(const std::vector<uint32_t>& vec1, const std::vector<uint32_t> vec2) {
+bool ModTwoAddVectors(const std::vector<uint32_t>& vec1, const std::vector<uint32_t> vec2) {
 	for (size_t i = 0; i < vec1.size(); ++i) {
 			if (vec1[i] != vec2[i]) {
 				return true;
@@ -214,28 +219,29 @@ double CheckError(const std::vector<std::vector<uint32_t>>& out_bits, const std:
 }
 
 int main () {
-	uint32_t block = 1000000;
+	uint32_t block = 1;
 	std::vector<std::vector<uint32_t>> out_bits (block, std::vector<uint32_t> (4));
 	for (std::vector<uint32_t>& bits : out_bits) {
 		RandBits(bits);
 	}
 	std::vector<std::vector<uint32_t>> out_code_sequences = Coding(out_bits);
-	std::vector<uint32_t> h = {0, 1, 2, 3};
+	std::vector<double> A = {0, sqrt(2), 2, sqrt(6)};
 	std::vector<double> d = {0, 1.5, 4.35, 9.25};
 	std::vector<double> errs (4);
-	double A;
-	for (size_t i = 0; i < h.size(); ++i)
-	{
-		A = sqrt(h[i]);
-		std::vector<std::vector<std::complex<double>>> signal =  Modulation(out_code_sequences, A);
+	for (size_t i = 0; i < A.size(); ++i) {
+		cout << "Отношение сигнал/шум: " << i << endl;
+		std::vector<std::vector<std::complex<double>>> signal =  Modulation(out_code_sequences, A[i]);
 		std::vector<std::vector<std::complex<double>>> signal_with_noise = AddNormalNoise(signal);
 		std::vector<std::vector<double>> bit_reliability (block, std::vector<double> (7));
-		std::vector<std::vector<uint32_t>> in_code_sequences = Demodulation(signal_with_noise, bit_reliability, d[i], A);
+		std::vector<std::vector<uint32_t>> in_code_sequences = Demodulation(signal_with_noise, bit_reliability, d[i], A[i]);
+		cout << "Надежность битов" << endl;
+		Print2dVector(bit_reliability);
 		std::vector<std::vector<uint32_t>> in_bits = Decoding(in_code_sequences, bit_reliability);
 		errs[i] = CheckError(out_bits, in_bits);
-		std::cout << CheckError(out_bits, in_bits) << std::endl;
+		cout << endl;
+//		std::cout << CheckError(out_bits, in_bits) << std::endl;
 	}
-	WriteToTxt(errs, "errs_vector_my.txt");
+//	WriteToTxt(errs, "errs_vector_my.txt");
 //	std::vector<std::vector<std::complex<double>>> signal =  Modulation(out_code_sequences, A);
 //	std::vector<std::vector<std::complex<double>>> signal_with_noise = AddNormalNoise(signal);
 //	std::vector<std::vector<double>> bit_reliability (block, std::vector<double> (7));

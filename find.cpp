@@ -142,16 +142,14 @@ double CheckError(const std::vector<std::vector<uint32_t>>& out_bits, const std:
 	for (size_t i = 0; i < in_bits.size(); ++i) {
 		errs += ModTwoAddVectors(out_bits[i], in_bits[i]);
 	}
-	return errs / static_cast<double>(in_bits.size());
+	return errs / static_cast<double>(in_bits.size() * in_bits[0].size());
 }
 
 int main () {
 	uint32_t block = 1000000;
 	std::vector<std::vector<uint32_t>> out_bits (block, std::vector<uint32_t> (4, 0));
 	std::vector<std::vector<uint32_t>> out_code_sequences = Coding(out_bits);
-	std::vector<uint32_t> h = {0, 1, 2, 3};
-	std::vector<double> errs (4);
-	double A = 2.43 * sqrt(2);
+	double A = sqrt(6);
 	std::vector<std::vector<std::complex<double>>> signal =  Modulation(out_code_sequences, A);
 	std::vector<std::vector<std::complex<double>>> signal_with_noise = AddNormalNoise(signal);
 	std::vector<std::vector<uint32_t>> in_code_sequences = Demodulation(signal_with_noise);
