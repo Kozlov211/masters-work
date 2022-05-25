@@ -154,25 +154,15 @@ int main () {
 		RandBits(bits);
 	}
 	std::vector<std::vector<uint32_t>> out_code_sequences = Coding(out_bits);
-	std::vector<uint32_t> h = {0, 1, 2, 3};
+	std::vector<double> A = {0, sqrt(2), 2, sqrt(6)};
 	std::vector<double> errs (4);
-	double A;
-	for (size_t i = 0; i < h.size(); ++i) {
-		A = sqrt(h[i]);
-		std::vector<std::vector<std::complex<double>>> signal =  Modulation(out_code_sequences, A);
+	for (size_t i = 0; i < A.size(); ++i) {
+		std::vector<std::vector<std::complex<double>>> signal =  Modulation(out_code_sequences, A[i]);
 		std::vector<std::vector<std::complex<double>>> signal_with_noise = AddNormalNoise(signal);
 		std::vector<std::vector<uint32_t>> in_code_sequences = Demodulation(signal_with_noise);
 		errs[i] = CheckError(out_code_sequences, in_code_sequences);
-		std::cout << CheckError(out_code_sequences, in_code_sequences) << std::endl;
+		std::cout << "Ошибок:" << CheckError(out_code_sequences, in_code_sequences) << std::endl;
 	}
-	WriteToTxt(errs, "err_vector.txt");
-//	std::vector<std::vector<std::complex<double>>> signal =  Modulation(out_code_sequences, A);
-//	std::vector<std::vector<std::complex<double>>> signal_with_noise = AddNormalNoise(signal);
-//	std::vector<std::vector<uint32_t>> in_code_sequences = Demodulation(signal_with_noise);
-//	std::cout << CheckError(out_code_sequences, in_code_sequences) << std::endl;
-//	Print2dVector(out_code_sequences);
-//	Print2dVector(in_code_sequences);
-//	Print2dVector(out_bits);
-//	Print2dVector(in_bits);
+	WriteToTxt(errs, "errs_vector.txt");
 	return 0;
 }
